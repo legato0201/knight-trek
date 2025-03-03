@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Knight Trek - Progressive & High Score</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+      background: #f0f0f0;
+    }
+    /* ゲーム全体コンテナ */
+    #km-game-container {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 10px;
+      position: relative;
+    }
+    #km-game-container h1 { margin-bottom: 5px; }
+    #km-game-container button {
+      padding: 10px 20px;
+      margin: 5px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    /* モード・難易度・ゲーム情報 */
+    #km-mode-selection,
+    #km-difficulty-selection,
+    #km-game-info {
+      margin-bottom: 10px;
+    }
+    /* 盤面コンテナ（横幅はJS側でセルサイズ×列数に設定） */
+    #km-board-container {
+      margin: 20px auto;
+      display: grid;
+      grid-gap: 0;
+      justify-content: center;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    /* セル（初期サイズは50px×50px、JS側で上書き） */
+    .km-board-cell {
+      width: 50px;
+      height: 50px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+    }
+    /* オーバーレイ用 */
+    #km-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    #km-overlay-message {
+      background: #fff;
+      padding: 20px 30px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    #km-overlay-message p {
+      margin: 0 0 15px 0;
+      font-size: 18px;
+    }
+    #km-highscore-display {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="km-game-container">
+    <h1>Knight Trek</h1>
+    <div id="km-mode-selection">
+      <h2>モード選択</h2>
+      <button id="km-practice-mode">練習</button>
+      <button id="km-time-limit-mode">制限時間</button>
+      <button id="km-move-limit-mode">制限移動</button>
+    </div>
+    <div id="km-difficulty-selection" style="display:none;">
+      <h2>難易度選択</h2>
+      <button id="km-easy-mode">簡単</button>
+      <button id="km-hard-mode">難しい</button>
+    </div>
+    <div id="km-game-info" style="display:none;">
+      <p id="km-status">Level: 1 | Moves: 0 | Time: 0</p>
+      <p id="km-highscore-display">High Score: 0</p>
+      <button id="km-reset-button">リセット</button>
+    </div>
+    <div id="km-board-container"></div>
+  </div>
+
+  <!-- オーバーレイメッセージ -->
+  <div id="km-overlay">
+    <div id="km-overlay-message">
+      <p id="km-overlay-text"></p>
+      <button id="km-overlay-button">OK</button>
+    </div>
+  </div>
+
+  <script>
+    // ナイトSVG（サイズ35pxに調整）
+    // Chess Horse SVG Vector, provided by SVG Repo (CC0 License)
+    const knightSVG = `
+<svg fill="#000000" version="1.1" id="Capa_1" xmlns="http://www.w3.org/2000/svg" 
+     xmlns:xlink="http://www.w3.org/1999/xlink" width="35px" height="35px" viewBox="0 0 482.011 482.011" xml:space="preserve">
+  <g>
+    <path d="M367.549,434.234h-6.409c-1.072-5.303-2.053-11.634-2.922-18.399H93.277c-0.529,5.964-0.964,12.061-1.228,18.399h-0.436
+		c-13.188,0-23.889,10.693-23.889,23.889s10.701,23.889,23.889,23.889h275.936c13.188,0,23.889-10.693,23.889-23.889
+		S380.737,434.234,367.549,434.234z"/>
+    <path d="M111.396,202.132c1.85,2.621,4.682,4.402,7.855,4.947c3.157,0.545,6.423-0.194,9.051-2.053l43.361-30.702
+		c5.35-3.794,12.644-3.313,17.466,1.159c11.804,10.933,28.43,14.993,43.936,10.739c11.929-3.266,21.82-11.143,27.885-21.586
+		c2.271,17.504-6.283,44.589-58.633,78.673c-48.479,31.564-78.961,64.365-95.4,108.822h251.036
+		c2.892-25.515,9.626-53.796,23.625-83.285c29.254-47.576,62.116-134.095-14.698-214.269
+		C302.771-12.331,245.741-4.344,213.763,9.358c-15.552,6.655-22.94,24.3-17.092,40.023l-35.865-33.22
+		c-2.005-1.858-5.007-2.169-7.371-0.763c-2.349,1.416-3.485,4.216-2.784,6.867l11.835,44.978c-4.324,3.569-8.29,7.574-11.37,12.395
+		l-55.569,87.026c-2.644,4.16-2.52,9.503,0.326,13.531L111.396,202.132z"/>
+    <path d="M87.18,399.908h280.368c8.802,0,15.926-7.132,15.926-15.926c0-8.794-7.124-15.926-15.926-15.926H87.18
+		c-8.802,0-15.926,7.132-15.926,15.926C71.255,392.777,78.378,399.908,87.18,399.908z"/>
+  </g>
+</svg>
+    `;
+
+    // Cookie操作用関数
+    function km_setCookie(name, value, days) {
+      let expires = "";
+      if (days) {
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        expires = "; expires=" + date.toUTCString();
+      }
+      document.cookie = name + "=" + (value || "") + expires + "; path=/";
+    }
+    function km_getCookie(name) {
+      const nameEQ = name + "=";
+      const ca = document.cookie.split(';');
+      for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+      }
+      return null;
+    }
+
+    // グローバル変数
+    let km_currentMode = "";
+    let km_boardSize = 5;  // 易しい:5x5, 難しい:8x8
+    let km_difficulty = "easy";  // "easy" または "hard"
+    let km_level = 1;
+    let km_knightPos = { row: 0, col: 0 };
+    let km_movesCount = 0;
+    let km_targetSquares = [];
+    let km_gameActive = false;
+    let km_timerInterval = null;
+    let km_elapsedTime = 0;
+    let km_timeLimit = 30;     // 時間制限モード用（秒）
+    let km_remainingTime = 0;  // 残り時間（timeLimitモード用）
+    let km_moveLimit = 15;     // 移動制限モード用（最大移動回数、後で再計算）
+    let km_visited = [];       // 盤面の訪問状態
+
+    // チェス盤の基本色
+    const km_lightColor = "#f0d9b5";
+    const km_darkColor = "#b58863";
+    // 訪問済みセルははっきりしたグレー
+    const km_lightVisited = "#d3d3d3";
+    const km_darkVisited = "#a9a9a9";
+
+    const km_boardContainer = document.getElementById("km-board-container");
+    const km_modeSelection = document.getElementById("km-mode-selection");
+    const km_diffSelection = document.getElementById("km-difficulty-selection");
+    const km_gameInfo = document.getElementById("km-game-info");
+    const km_statusText = document.getElementById("km-status");
+    const km_highscoreDisplay = document.getElementById("km-highscore-display");
+
+    // オーバーレイ要素
+    const km_overlay = document.getElementById("km-overlay");
+    const km_overlayText = document.getElementById("km-overlay-text");
+    const km_overlayButton = document.getElementById("km-overlay-button");
+
+    // オーバーレイ表示関数
+    function km_showOverlay(message, callback) {
+      km_overlayText.textContent = message;
+      km_overlay.style.display = "flex";
+      km_overlayButton.onclick = function() {
+        km_overlay.style.display = "none";
+        if (callback) callback();
+      }
+    }
+
+    // モード選択
+    document.getElementById("km-practice-mode").addEventListener("click", () => {
+      km_currentMode = "practice";
+      km_showDifficultySelection();
+    });
+    document.getElementById("km-time-limit-mode").addEventListener("click", () => {
+      km_currentMode = "timeLimit";
+      km_showDifficultySelection();
+    });
+    document.getElementById("km-move-limit-mode").addEventListener("click", () => {
+      km_currentMode = "moveLimit";
+      km_showDifficultySelection();
+    });
+
+    // 難易度選択
+    document.getElementById("km-easy-mode").addEventListener("click", () => {
+      km_boardSize = 5;
+      km_difficulty = "easy";
+      km_startGame();
+    });
+    document.getElementById("km-hard-mode").addEventListener("click", () => {
+      km_boardSize = 8;
+      km_difficulty = "hard";
+      km_startGame();
+    });
+
+    // リセットボタン
+    document.getElementById("km-reset-button").addEventListener("click", km_resetGame);
+
+    function km_showDifficultySelection() {
+      km_modeSelection.style.display = "none";
+      km_diffSelection.style.display = "block";
+      // 既に表示されているデモ盤面をクリア
+      km_boardContainer.innerHTML = "";
+    }
+
+    // ゲーム開始（最初のレベルから）
+    function km_startGame() {
+      km_diffSelection.style.display = "none";
+      km_gameInfo.style.display = "block";
+      km_level = 1;
+      km_movesCount = 0;
+      km_elapsedTime = 0;
+      clearInterval(km_timerInterval);
+      km_loadLevel();
+      km_gameActive = true;
+      km_updateHighScoreDisplay();
+      if (km_currentMode === "timeLimit" || km_currentMode === "practice") {
+        // 時間制限モード：設定時間（易しい：盤面サイズ×5秒、難しい：盤面サイズ×3秒）
+        km_timeLimit = (km_difficulty === "easy") ? km_boardSize * 5 : km_boardSize * 3;
+        km_remainingTime = km_timeLimit;
+        km_startTimer();
+      }
+    }
+
+    // レベル開始
+    function km_loadLevel() {
+      km_knightPos = { row: 0, col: 0 };
+      km_visited = [];
+      for (let r = 0; r < km_boardSize; r++) {
+        let rowArr = [];
+        for (let c = 0; c < km_boardSize; c++) {
+          rowArr.push(false);
+        }
+        km_visited.push(rowArr);
+      }
+      km_visited[km_knightPos.row][km_knightPos.col] = true;
+      km_movesCount = 0;
+      km_elapsedTime = 0;
+      clearInterval(km_timerInterval);
+      if (km_currentMode === "timeLimit" || km_currentMode === "practice") {
+        km_startTimer();
+      }
+      // ターゲット数の設定
+      let targetCount;
+      if (km_difficulty === "easy") {
+        targetCount = km_level + 2; // 例：レベル1→3個、レベル2→4個…
+      } else {
+        targetCount = 3 + (km_level - 1) * 3; // 例：レベル1→3個、レベル2→6個…
+      }
+      km_generateTargets(targetCount);
+      // 移動制限モードの場合、TSPで実際の最短手数を計算し、余裕分（易しい:+2、難しい:+1）を加える
+      if (km_currentMode === "moveLimit") {
+        let tsp = km_computeTSP(km_knightPos, km_targetSquares, km_visited);
+        if (tsp === Infinity) {
+          km_gameOver("No reachable targets!");
+          return;
+        }
+        let margin = (km_difficulty === "easy") ? 2 : 1;
+        km_moveLimit = tsp + margin;
+      }
+      km_generateBoard();
+      km_updateStatus();
+    }
+
+    // 次レベルへ
+    function km_nextLevel() {
+      km_level++;
+      km_showOverlay("Level Clear! 次はレベル " + km_level + " です。", () => {
+        km_loadLevel();
+      });
+    }
+
+    function km_resetGame() {
+      clearInterval(km_timerInterval);
+      km_boardContainer.innerHTML = "";
+      km_modeSelection.style.display = "block";
+      km_diffSelection.style.display = "none";
+      km_gameInfo.style.display = "none";
+      km_statusText.textContent = "Level: 1 | Moves: 0 | Time: 0";
+      km_gameActive = false;
+      // 初期状態のデモ盤面を表示
+      km_generateDemoBoard();
+    }
+
+    // 盤面生成（インタラクティブ版）
+    function km_generateBoard() {
+      km_boardContainer.innerHTML = "";
+      // セルサイズは画面幅に応じて調整（窓幅が480px未満なら40px、それ以外は50px）
+      let cellSize = (window.innerWidth < 480) ? 40 : 50;
+      km_boardContainer.style.width = (cellSize * km_boardSize) + "px";
+      km_boardContainer.style.gridTemplateColumns = `repeat(${km_boardSize}, ${cellSize}px)`;
+      for (let row = 0; row < km_boardSize; row++) {
+        for (let col = 0; col < km_boardSize; col++) {
+          const cell = document.createElement("div");
+          cell.classList.add("km-board-cell");
+          cell.style.width = cellSize + "px";
+          cell.style.height = cellSize + "px";
+          cell.dataset.row = row;
+          cell.dataset.col = col;
+          cell.addEventListener("click", km_onCellClick);
+          cell.addEventListener("touchstart", km_onCellClick);
+          km_boardContainer.appendChild(cell);
+        }
+      }
+      km_updateBoard();
+    }
+
+    // ターゲット生成（未訪問セルからランダムに）
+    function km_generateTargets(count) {
+      km_targetSquares = [];
+      let attempts = 0;
+      while (km_targetSquares.length < count && attempts < 1000) {
+        let r = Math.floor(Math.random() * km_boardSize);
+        let c = Math.floor(Math.random() * km_boardSize);
+        attempts++;
+        if (km_visited[r][c]) continue;
+        if (km_targetSquares.some(sq => sq.row === r && sq.col === c)) continue;
+        km_targetSquares.push({ row: r, col: c });
+      }
+    }
+
+    // 盤面更新
+    function km_updateBoard() {
+      const cells = document.querySelectorAll(".km-board-cell");
+      cells.forEach(cell => {
+        const r = parseInt(cell.dataset.row);
+        const c = parseInt(cell.dataset.col);
+        let baseColor = ((r + c) % 2 === 0) ? km_lightColor : km_darkColor;
+        if (km_visited[r][c]) {
+          baseColor = ((r + c) % 2 === 0) ? km_lightVisited : km_darkVisited;
+        }
+        // 未訪問かつターゲットなら黄色に
+        if (km_targetSquares.some(sq => sq.row === r && sq.col === c) && !km_visited[r][c]) {
+          baseColor = "yellow";
+        }
+        cell.style.backgroundColor = baseColor;
+        if (r === km_knightPos.row && c === km_knightPos.col) {
+          cell.innerHTML = knightSVG;
+        } else {
+          cell.innerHTML = "";
+        }
+      });
+    }
+
+    // クリック／タッチイベントハンドラ（インタラクティブ版）
+    function km_onCellClick(e) {
+      if (!km_gameActive) return;
+      const target = e.currentTarget;
+      const row = parseInt(target.dataset.row);
+      const col = parseInt(target.dataset.col);
+      if (km_currentMode === "moveLimit" && km_visited[row][col]) return;
+      if (km_isLegalMove(km_knightPos.row, km_knightPos.col, row, col)) {
+        km_knightPos = { row, col };
+        km_visited[row][col] = true;
+        km_movesCount++;
+        // 移動制限モード：超過チェック
+        if (km_currentMode === "moveLimit" && km_movesCount > km_moveLimit) {
+          km_gameOver("Move limit exceeded!");
+          return;
+        }
+        const targetIndex = km_targetSquares.findIndex(sq => sq.row === row && sq.col === col);
+        if (targetIndex !== -1) {
+          km_targetSquares.splice(targetIndex, 1);
+        }
+        km_updateBoard();
+        km_updateStatus();
+        // 全ターゲット取得で次レベル
+        if (km_targetSquares.length === 0) {
+          km_nextLevel();
+          return;
+        }
+        // 移動制限モード：再計算して残り移動数が足りなければゲームオーバー
+        if (km_currentMode === "moveLimit") {
+          let tsp = km_computeTSP(km_knightPos, km_targetSquares, km_visited);
+          let movesLeft = km_moveLimit - km_movesCount;
+          if (tsp === Infinity || movesLeft < tsp) {
+            km_gameOver("No reachable targets!");
+            return;
+          }
+        }
+      }
+    }
+
+    // ナイトの合法手判定（2&1の動き）
+    function km_isLegalMove(fromRow, fromCol, toRow, toCol) {
+      const dr = Math.abs(toRow - fromRow);
+      const dc = Math.abs(toCol - fromCol);
+      return ((dr === 2 && dc === 1) || (dr === 1 && dc === 2));
+    }
+
+    // BFSで障害（既訪問セル）を考慮した最短距離を計算
+    function km_bfs(start, goal, visited) {
+      let queue = [];
+      let localVisited = Array.from({ length: km_boardSize }, () => Array(km_boardSize).fill(false));
+      queue.push({ row: start.row, col: start.col, dist: 0 });
+      localVisited[start.row][start.col] = true;
+      const moves = [
+        { dr: 2, dc: 1 },
+        { dr: 2, dc: -1 },
+        { dr: -2, dc: 1 },
+        { dr: -2, dc: -1 },
+        { dr: 1, dc: 2 },
+        { dr: 1, dc: -2 },
+        { dr: -1, dc: 2 },
+        { dr: -1, dc: -2 }
+      ];
+      while (queue.length > 0) {
+        let cur = queue.shift();
+        if (cur.row === goal.row && cur.col === goal.col) {
+          return cur.dist;
+        }
+        for (const move of moves) {
+          let nr = cur.row + move.dr;
+          let nc = cur.col + move.dc;
+          if (nr < 0 || nr >= km_boardSize || nc < 0 || nc >= km_boardSize) continue;
+          // 既訪問セルは通れない
+          if (visited[nr][nc]) continue;
+          if (!localVisited[nr][nc]) {
+            localVisited[nr][nc] = true;
+            queue.push({ row: nr, col: nc, dist: cur.dist + 1 });
+          }
+        }
+      }
+      return Infinity;
+    }
+
+    // TSPによる、現在の状態から全ターゲット取得の最短手数を計算
+    function km_computeTSP(currentPos, targets, visited) {
+      const n = targets.length;
+      if (n === 0) return 0;
+      // 全点：インデックス0を現在位置、1..nをターゲット
+      let points = [currentPos].concat(targets);
+      // 距離行列
+      let dist = Array.from({ length: n + 1 }, () => Array(n + 1).fill(Infinity));
+      for (let i = 0; i <= n; i++) {
+        for (let j = 0; j <= n; j++) {
+          if (i === j) dist[i][j] = 0;
+          else {
+            dist[i][j] = km_bfs(points[i], points[j], visited);
+          }
+        }
+      }
+      // DP TSP: dp[mask][i] 最後に訪れた点が i（1-indexed）で、mask（i-1のビットで管理）を訪問したときの最短手数
+      let size = 1 << n;
+      let dp = Array.from({ length: size }, () => Array(n + 1).fill(Infinity));
+      for (let i = 1; i <= n; i++) {
+        dp[1 << (i - 1)][i] = dist[0][i];
+      }
+      for (let mask = 0; mask < size; mask++) {
+        for (let i = 1; i <= n; i++) {
+          if (!(mask & (1 << (i - 1)))) continue;
+          for (let j = 1; j <= n; j++) {
+            if (mask & (1 << (j - 1))) continue;
+            let nextMask = mask | (1 << (j - 1));
+            dp[nextMask][j] = Math.min(dp[nextMask][j], dp[mask][i] + dist[i][j]);
+          }
+        }
+      }
+      let best = Infinity;
+      for (let i = 1; i <= n; i++) {
+        best = Math.min(best, dp[size - 1][i]);
+      }
+      return best;
+    }
+
+    // ステータス更新（High Score含む）
+    function km_updateStatus() {
+      let timeStr = "";
+      if (km_currentMode === "timeLimit") {
+        timeStr = ` | Time: ${km_remainingTime}s`;
+      } else {
+        timeStr = ` | Time: ${km_elapsedTime}s`;
+      }
+      let status = `Level: ${km_level} | Moves: ${km_movesCount}${timeStr}`;
+      if (km_currentMode === "moveLimit") {
+        status += ` | Move Limit: ${km_moveLimit}`;
+      }
+      km_statusText.textContent = status;
+      km_updateHighScoreDisplay();
+    }
+
+    // タイマー開始（時間制限モードはカウントダウン）
+    function km_startTimer() {
+      clearInterval(km_timerInterval);
+      if (km_currentMode === "timeLimit") {
+        km_remainingTime = km_timeLimit;
+      }
+      km_timerInterval = setInterval(() => {
+        if (km_currentMode === "timeLimit") {
+          km_remainingTime--;
+          if (km_remainingTime <= 0) {
+            km_updateStatus();
+            km_gameOver("Time Up!");
+            return;
+          }
+        } else {
+          km_elapsedTime++;
+        }
+        km_updateStatus();
+      }, 1000);
+    }
+
+    // ハイスコア更新
+    function km_updateHighScore() {
+      let highScore = parseInt(km_getCookie("knightTrekHighScore") || "0");
+      if (km_level > highScore) {
+        km_setCookie("knightTrekHighScore", km_level, 365);
+      }
+    }
+    function km_updateHighScoreDisplay() {
+      let highScore = km_getCookie("knightTrekHighScore") || "0";
+      km_highscoreDisplay.textContent = "High Score: " + highScore;
+    }
+
+    // ゲーム終了処理
+    function km_gameOver(message) {
+      km_gameActive = false;
+      clearInterval(km_timerInterval);
+      km_updateHighScore();
+      km_showOverlay(message + " Your Level: " + km_level, () => {
+        km_resetGame();
+      });
+    }
+
+    /* --- ここから初期画面用のデモ盤面表示 --- */
+    function km_generateDemoBoard() {
+      // デモ用盤面サイズは固定（例：5x5）
+      const demoSize = 5;
+      let cellSize = (window.innerWidth < 480) ? 40 : 50;
+      km_boardContainer.innerHTML = "";
+      km_boardContainer.style.width = (cellSize * demoSize) + "px";
+      km_boardContainer.style.gridTemplateColumns = `repeat(${demoSize}, ${cellSize}px)`;
+      // ランダムなナイト位置
+      const demoKnightPos = {
+        row: Math.floor(Math.random() * demoSize),
+        col: Math.floor(Math.random() * demoSize)
+      };
+      for (let row = 0; row < demoSize; row++) {
+        for (let col = 0; col < demoSize; col++) {
+          const cell = document.createElement("div");
+          cell.classList.add("km-board-cell");
+          cell.style.width = cellSize + "px";
+          cell.style.height = cellSize + "px";
+          cell.dataset.row = row;
+          cell.dataset.col = col;
+          let baseColor = ((row + col) % 2 === 0) ? km_lightColor : km_darkColor;
+          cell.style.backgroundColor = baseColor;
+          if (row === demoKnightPos.row && col === demoKnightPos.col) {
+            cell.innerHTML = knightSVG;
+          }
+          km_boardContainer.appendChild(cell);
+        }
+      }
+    }
+    /* --- 初期画面ではデモ盤面を表示（非インタラクティブ） --- */
+    window.onload = function() {
+      km_generateDemoBoard();
+    };
+    /* --- ここまで初期画面用 --- */
+  </script>
+</body>
+</html>
